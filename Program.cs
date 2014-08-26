@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using PetaPoco;
+using Newtonsoft.Json;
+using System.Net;
+using System.Configuration;
 
 namespace reports_tcado
 {
@@ -11,44 +14,154 @@ namespace reports_tcado
         static void Main(string[] args)
         {
             #region CSR Reports
-            //this year
-            var startdate = DateTime.Today.AddMonths(1).AddYears(-1).AddDays(1-DateTime.Today.Day);
-            var enddate = DateTime.Today.AddMonths(1);
-            var this_year = CSRReports.GetMonthly(startdate, enddate);
-
-            //this week
-            startdate = DateTime.Today.AddDays(0 - (int)DateTime.Today.DayOfWeek);
-            enddate = startdate.AddDays(7);
-            var this_week = CSRReports.GetSummary(startdate, enddate);
 
             //today
-            startdate = DateTime.Today;
-            enddate = DateTime.Today.AddDays(1);
-            var today = CSRReports.GetSummary(startdate, enddate);
+            var startdate = DateTime.Today;
+            var enddate = DateTime.Today.AddDays(1);
+            var today = CSRReports.GetSummary(startdate, enddate, 277);
+            var yesterday = CSRReports.GetSummary(startdate.AddDays(-1), enddate.AddDays(-1), 278);
+            PushSummary(today, ConfigurationManager.AppSettings["today_widget"]);
+            PushSummary(yesterday, ConfigurationManager.AppSettings["yesterday_widget"]);
 
             //this month
             startdate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
             enddate = startdate.AddMonths(1);
-            var this_month = CSRReports.GetSummary(startdate, enddate);
+            var this_month = CSRReports.GetSummary(startdate, enddate, 277);
+            PushSummary(this_month, ConfigurationManager.AppSettings["monthly_widget"]);
+            this_month = CSRReports.GetSummary(startdate, enddate, 278);
+            PushSummary(this_month, ConfigurationManager.AppSettings["lo_monthly_funnel"]);
+            var location_month = CSRReports.GetStateAppointments(startdate, enddate, 278);
+            PushMap(location_month, ConfigurationManager.AppSettings["location_monthly"]);
+            var campaign_source = CSRReports.GetCampaignSource(startdate, enddate, 6);
+            PushSummary(campaign_source, ConfigurationManager.AppSettings["campaign_source"]);
+
+            var min_appointments = CSRReports.GetMinAppointmentsDaily(startdate, enddate, 277);
+            var max_appointments = CSRReports.GetMaxAppointmentsDaily(startdate, DateTime.Today.AddDays(-1), 277);
+            var today_appointments = CSRReports.GetMaxAppointmentsDaily(DateTime.Today, DateTime.Today.AddDays(1), 277);
+            PushGauge(min_appointments, max_appointments, today_appointments, ConfigurationManager.AppSettings["daily_gauge"]);
+
+            min_appointments = CSRReports.GetMinAppointmentsDaily(startdate, enddate, 278);
+            max_appointments = CSRReports.GetMaxAppointmentsDaily(startdate, DateTime.Today.AddDays(-1), 278);
+            today_appointments = CSRReports.GetMaxAppointmentsDaily(DateTime.Today, DateTime.Today.AddDays(1), 278);
+            PushGauge(min_appointments, max_appointments, today_appointments, ConfigurationManager.AppSettings["lo_daily_gauge"]);
+
+            startdate = new DateTime(DateTime.Today.Year, 1, 1);
+            enddate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+            min_appointments = CSRReports.GetMinAppointmentsMonthly(startdate, enddate, 277);
+            max_appointments = CSRReports.GetMaxAppointmentsMonthly(startdate, enddate, 277);
+            var month_appointments = CSRReports.GetMaxAppointmentsMonthly(new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1), DateTime.Today, 277);
+            PushGauge(min_appointments, max_appointments, month_appointments, ConfigurationManager.AppSettings["monthly_gauge"]);
+
+            min_appointments = CSRReports.GetMinAppointmentsMonthly(startdate, enddate, 278);
+            max_appointments = CSRReports.GetMaxAppointmentsMonthly(startdate, enddate, 278);
+            month_appointments = CSRReports.GetMaxAppointmentsMonthly(new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1), DateTime.Today, 278);
+            PushGauge(min_appointments, max_appointments, month_appointments, ConfigurationManager.AppSettings["lo_monthly_gauge"]);
+
             #endregion
+
+
 
             #region LO Reports
-            //previous month
-            startdate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(-1);
-            enddate = startdate.AddMonths(1);
-            var lo_last_month = LOReports.GetSummary(startdate, enddate);
 
-            //this month
-            startdate = enddate.AddMonths(1);
-            enddate = enddate.AddMonths(1);
-            var lo_this_month = LOReports.GetSummary(startdate, enddate);
-
-            //yesterday
-            startdate = DateTime.Today.AddDays(-1);
-            enddate = DateTime.Today;
-            var lo_today = LOReports.GetSummary(startdate, enddate);
             #endregion
+        }
 
+        private static void PushSummary(IEnumerable<CSRSummary> summary, string widget_url, bool showtotal=true, int maxitems=8)
+        {
+            var gecko = new GeckoData();
+            var items = summary.Take(maxitems);
+            if (showtotal)
+            {
+                items = summary.Take(maxitems - 1);
+                gecko.item.Add(new GeckoFunnelItem()
+                {
+                    label = "Total",
+                    value = Convert.ToString(items.Sum(i => i.AppointmentsMade))
+                });
+            }
+            foreach (var csr in items)
+            {
+                gecko.item.Add(new GeckoFunnelItem()
+                {
+                    label = csr.SetterName,
+                    value = Convert.ToString(csr.AppointmentsMade)
+                });
+            }
+            var push_data = new GeckAPI() {
+                api_key = ConfigurationManager.AppSettings["api_key"],
+                data = gecko
+            };
+            var json = JsonConvert.SerializeObject(push_data);
+            PushWidget(widget_url, json);
+        }
+
+        private static void PushMap(IEnumerable<CSRState> summary, string widget_url)
+        {
+            var gecko = new GeckoPoints();
+            foreach (var csr in summary)
+            {
+                var city = new GeckoCity()
+                {
+                    region_code = csr.StateName,
+                    country_code = "US",
+                    city_name = csr.HomeCity
+                };
+                gecko.point.Add(new GeckoPoint()
+                {
+                    city = city,
+                    size = csr.Appointments
+                });
+            }
+            var push_data = new
+            {
+                api_key = ConfigurationManager.AppSettings["api_key"],
+                data = new
+                {
+                    points = gecko
+                }
+            };
+            var json = JsonConvert.SerializeObject(push_data);
+            PushWidget(widget_url, json);
+        }
+
+        private static void PushGauge(int min, int max, int current, string widget_url)
+        {
+            var gecko = new
+            {
+                api_key = ConfigurationManager.AppSettings["api_key"],
+                data = new
+                {
+                    item = current,
+                    min = new
+                    {
+                        value = min
+                    },
+                    max = new
+                    {
+                        value = max
+                    }
+                }
+            };
+            var json = JsonConvert.SerializeObject(gecko);
+            PushWidget(widget_url, json);
+        }
+
+        private static void PushWidget(string widget_url, string json)
+        {
+            var wc = new WebClient();
+            wc.Headers.Add("Content-Type", "application/json");
+            try
+            {
+                var result = wc.UploadString(widget_url, "POST", json);
+            }
+            catch (System.Net.WebException ex)
+            {
+                using (var reader = new System.IO.StreamReader(ex.Response.GetResponseStream()))
+                {
+                    var msg = reader.ReadToEnd();
+                    Console.WriteLine(msg);
+                }
+            }
         }
     }
 }
