@@ -15,11 +15,9 @@ namespace reports_tcado
         public GeckoData()
         {
             item = new List<GeckoFunnelItem>();
+            percentage = "hide";
         }
-        public string percentage
-        {
-            get { return "hide"; }
-        }
+        public string percentage { get; set; }
         public IList<GeckoFunnelItem> item { get; set; }
     }
 

@@ -6,12 +6,38 @@ using PetaPoco;
 using Newtonsoft.Json;
 using System.Net;
 using System.Configuration;
-
+using CsvHelper;
+using System.IO;
 namespace reports_tcado
 {
     class Program
     {
+        private static string widget_base = ConfigurationManager.AppSettings["widget_url"];
         static void Main(string[] args)
+        {
+            if (args[0] == "gecko")
+            {
+                GeckoBoard();
+            }
+
+            if (args[0] == "reports")
+            {
+                CSVReports();
+            }
+        }
+
+        static void CSVReports()
+        {
+            var missedappointments = MissedAppointmentReport.GetReport();
+            var missedappointments_file = String.Format("missedappointments_{0:yyyyMMdd}.csv", DateTime.Now);
+            missedappointments_file = Path.Combine(ConfigurationManager.AppSettings["reports_folder"], missedappointments_file);
+            using (var writer = new CsvWriter(File.CreateText(missedappointments_file)))
+            {
+                writer.WriteRecords(missedappointments);
+            }
+        }
+
+        static void GeckoBoard()
         {
             #region CSR Reports
 
@@ -66,17 +92,18 @@ namespace reports_tcado
             #endregion
         }
 
-        private static void PushSummary(IEnumerable<CSRSummary> summary, string widget_url, bool showtotal=true, int maxitems=8)
+        private static void PushSummary(IEnumerable<CSRSummary> summary, string widget_key, bool showtotal=false, int maxitems=8)
         {
             var gecko = new GeckoData();
             var items = summary.Take(maxitems);
             if (showtotal)
             {
+                gecko.percentage = "";
                 items = summary.Take(maxitems - 1);
                 gecko.item.Add(new GeckoFunnelItem()
                 {
                     label = "Total",
-                    value = Convert.ToString(items.Sum(i => i.AppointmentsMade))
+                    value = Convert.ToString(items.Sum(i => i.AppointmentsMade)),
                 });
             }
             foreach (var csr in items)
@@ -92,10 +119,10 @@ namespace reports_tcado
                 data = gecko
             };
             var json = JsonConvert.SerializeObject(push_data);
-            PushWidget(widget_url, json);
+            PushWidget(widget_key, json);
         }
 
-        private static void PushMap(IEnumerable<CSRState> summary, string widget_url)
+        private static void PushMap(IEnumerable<CSRState> summary, string widget_key)
         {
             var gecko = new GeckoPoints();
             foreach (var csr in summary)
@@ -121,10 +148,10 @@ namespace reports_tcado
                 }
             };
             var json = JsonConvert.SerializeObject(push_data);
-            PushWidget(widget_url, json);
+            PushWidget(widget_key, json);
         }
 
-        private static void PushGauge(int min, int max, int current, string widget_url)
+        private static void PushGauge(int min, int max, int current, string widget_key)
         {
             var gecko = new
             {
@@ -143,16 +170,19 @@ namespace reports_tcado
                 }
             };
             var json = JsonConvert.SerializeObject(gecko);
-            PushWidget(widget_url, json);
+            PushWidget(widget_key, json);
         }
 
-        private static void PushWidget(string widget_url, string json)
+        private static void PushWidget(string widget_key, string json)
         {
             var wc = new WebClient();
             wc.Headers.Add("Content-Type", "application/json");
             try
             {
-                var result = wc.UploadString(widget_url, "POST", json);
+                foreach (var key in widget_key.Split(new string[] { "|" }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var result = wc.UploadString(widget_base + key.Trim(), "POST", json);
+                }
             }
             catch (System.Net.WebException ex)
             {

@@ -32,6 +32,9 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="CsvHelper">
+      <HintPath>packages\CsvHelper.2.7.1\lib\net35-client\CsvHelper.dll</HintPath>
+    </Reference>
     <Reference Include="Newtonsoft.Json">
       <HintPath>packages\Newtonsoft.Json.6.0.4\lib\net35\Newtonsoft.Json.dll</HintPath>
     </Reference>
@@ -47,6 +50,7 @@
     <Compile Include="CSRReports.cs" />
     <Compile Include="GeckoData.cs" />
     <Compile Include="LOReports.cs" />
+    <Compile Include="MissedAppointmentReport.cs" />
     <Compile Include="PetaPoco.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
