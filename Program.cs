@@ -35,6 +35,14 @@ namespace reports_tcado
             {
                 writer.WriteRecords(missedappointments);
             }
+
+            var beckyreport = MissedAppointmentReport.GetBeckyReport(DateTime.Today.AddDays(-30), DateTime.Today.AddDays(1));
+            var beckyreport_file = String.Format("beckyreport_{0:yyyyMMdd}.csv", DateTime.Now);
+            beckyreport_file = Path.Combine(ConfigurationManager.AppSettings["reports_folder"], beckyreport_file);
+            using (var writer = new CsvWriter(File.CreateText(beckyreport_file)))
+            {
+                writer.WriteRecords(beckyreport);
+            }
         }
 
         static void GeckoBoard()

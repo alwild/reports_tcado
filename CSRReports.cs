@@ -126,6 +126,7 @@ from Borrower b
 inner join [File] f on f.BorrowerID=b.ID and f.DateCreated > @0 and f.DateCreated < @1
 inner join Campaign c on c.ID=b.CampaignID
 inner join CampaignSource s on s.ID=c.SourceID
+inner join [Group] g on g.ID=c.OwningGroupID AND (g.ID IN (1, 21, 22) OR g.ParentGroupID IN (1, 21, 22))
 where s.CategoryID=@2
 group by CompanyName
 order by 2 desc
