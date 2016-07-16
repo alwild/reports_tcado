@@ -28,9 +28,10 @@ namespace reports_tcado
 
         static void CSVReports()
         {
+            var reports_folder = ConfigurationManager.AppSettings["reports_folder"];
             var missedappointments = MissedAppointmentReport.GetReport();
             var missedappointments_file = String.Format("missedappointments_{0:yyyyMMdd}.csv", DateTime.Now);
-            missedappointments_file = Path.Combine(ConfigurationManager.AppSettings["reports_folder"], missedappointments_file);
+            missedappointments_file = Path.Combine(reports_folder, missedappointments_file);
             using (var writer = new CsvWriter(File.CreateText(missedappointments_file)))
             {
                 writer.WriteRecords(missedappointments);
@@ -38,17 +39,33 @@ namespace reports_tcado
 
             var beckyreport = MissedAppointmentReport.GetBeckyReport(DateTime.Today.AddDays(-30), DateTime.Today.AddDays(1));
             var beckyreport_file = String.Format("beckyreport_{0:yyyyMMdd}.csv", DateTime.Now);
-            beckyreport_file = Path.Combine(ConfigurationManager.AppSettings["reports_folder"], beckyreport_file);
+            beckyreport_file = Path.Combine(reports_folder, beckyreport_file);
             using (var writer = new CsvWriter(File.CreateText(beckyreport_file)))
             {
                 writer.WriteRecords(beckyreport);
+            }
+
+            var campaignsummary = CampaignSummary.GetSummary(DateTime.Today.AddYears(-1), DateTime.Today.AddDays(1), 6);
+            var campaignsummary_file = String.Format("campaignsummary_{0:yyyyMMdd}.csv", DateTime.Now);
+            campaignsummary_file = Path.Combine(reports_folder, campaignsummary_file);
+            using (var writer = new CsvWriter(File.CreateText(campaignsummary_file)))
+            {
+                writer.WriteRecords(campaignsummary);
+            }
+
+            var campaigndetails = CampaignDetails.GetDetails(DateTime.Today.AddYears(-1), DateTime.Today.AddDays(1), 6);
+            var campaigndetails_file = String.Format("campaigndetails_{0:yyyyMMdd}.csv", DateTime.Now);
+            campaigndetails_file = Path.Combine(reports_folder, campaigndetails_file);
+            using (var writer = new CsvWriter(File.CreateText(campaigndetails_file)))
+            {
+                writer.WriteRecords(campaignsummary);
             }
         }
 
         static void GeckoBoard()
         {
             #region CSR Reports
-
+            
             //today
             var startdate = DateTime.Today;
             var enddate = DateTime.Today.AddDays(1);
@@ -91,13 +108,43 @@ namespace reports_tcado
             month_appointments = CSRReports.GetMaxAppointmentsMonthly(new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1), DateTime.Today, 278);
             PushGauge(min_appointments, max_appointments, month_appointments, ConfigurationManager.AppSettings["lo_monthly_gauge"]);
 
-            #endregion
+            var recent_offercodes = GetRecentOfferCodes();
+            var offers = CSRReports.GetOfferCodeSummary(DateTime.Today, DateTime.Today.AddDays(1));
+            var recent_offers = offers.Where(o => recent_offercodes.Contains(o.OfferCode));
+            PushList(recent_offers, ConfigurationManager.AppSettings["offercode_list"]);
 
+            #endregion
+            
 
 
             #region LO Reports
 
             #endregion
+        }
+
+        private static string[] GetRecentOfferCodes()
+        {
+            var url = "https://docs.google.com/spreadsheets/d/1njoKbNQOR1Z0rKQUmCcrPnIpI3gWQTe5lmGmYfqnAcY/pub?gid=0&single=true&output=csv";
+            var wc = new WebClient();
+            var csvdata = wc.DownloadString(url);
+            CsvReader reader = new CsvReader(new StringReader(csvdata));
+            var result = new List<string>();
+            result.Add("Internet");
+            //let's go back 2 weeks
+            var start_date = DateTime.Today.AddDays(-15);
+            while (reader.Read())
+            {
+                var sent = reader["sent"];
+                if (!String.IsNullOrEmpty(sent))
+                {
+                    var sent_date = Convert.ToDateTime(sent);
+                    if (sent_date >= start_date)
+                    {
+                        result.Add(reader["offer code"]);
+                    }
+                }
+            }
+            return result.ToArray();
         }
 
         private static void PushSummary(IEnumerable<CSRSummary> summary, string widget_key, bool showtotal=false, int maxitems=8)
@@ -127,6 +174,30 @@ namespace reports_tcado
                 data = gecko
             };
             var json = JsonConvert.SerializeObject(push_data);
+            PushWidget(widget_key, json);
+        }
+
+        private static void PushList(IEnumerable<OfferCodeSummary> summary, string widget_key)
+        {
+            var gecko = new GeckoList()
+            {
+                api_key = ConfigurationManager.AppSettings["api_key"]
+            };
+
+            foreach (var item in summary)
+            {
+                if (!String.IsNullOrEmpty(item.OfferCode))
+                {
+                    var listitem = new GeckoListItem();
+                    listitem.title = new GeckoListTitle()
+                    {
+                        text = item.OfferCode
+                    };
+                    listitem.description = Convert.ToString(item.OfferCount);
+                    gecko.data.Add(listitem);
+                }
+            }
+            var json = JsonConvert.SerializeObject(gecko);
             PushWidget(widget_key, json);
         }
 

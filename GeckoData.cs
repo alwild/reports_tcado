@@ -10,6 +10,7 @@ namespace reports_tcado
         public string api_key { get; set; }
         public GeckoData data { get; set; }
     }
+
     public class GeckoData
     {
         public GeckoData()
@@ -19,6 +20,27 @@ namespace reports_tcado
         }
         public string percentage { get; set; }
         public IList<GeckoFunnelItem> item { get; set; }
+    }
+
+    public class GeckoList
+    {
+        public GeckoList()
+        {
+            data = new List<GeckoListItem>();
+        }
+        public string api_key { get; set; }
+        public IList<GeckoListItem> data { get; set; }
+    }
+
+    public class GeckoListTitle
+    {
+        public string text { get; set; }
+    }
+
+    public class GeckoListItem
+    {
+        public GeckoListTitle title { get; set; }
+        public string description { get; set; }
     }
 
     public class GeckoFunnelItem

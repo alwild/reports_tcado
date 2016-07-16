@@ -61,6 +61,12 @@ namespace reports_tcado
         public int Appointments { get; set; }
     }
 
+    public class OfferCodeSummary
+    {
+        public string OfferCode { get; set; }
+        public int OfferCount { get; set; }
+    }
+
     public static class CSRReports
     {
         internal static readonly string connection_name = "LOXPressDatabase";
@@ -153,6 +159,53 @@ GROUP BY b.HomeCity, s.StateName, b.HomeCounty ORDER BY 2 DESC
             }
         }
 
+        private static bool isInternetOfferCode(string offercode)
+        {
+            //if it starts with a number or the letter v, then it is NOT an internet offer
+            var regex = new System.Text.RegularExpressions.Regex(@"^[\dv]");
+            var result = regex.IsMatch(offercode);
+            return !result;
+        }
+
+        public static IEnumerable<OfferCodeSummary> GetOfferCodeSummary(DateTime startdate, DateTime enddate)
+        {
+            using (var db = new PetaPoco.Database(connection_name))
+            {
+                var sql = @"
+select OfferCode, count(*) as OfferCount
+from [File] f
+  inner join Borrower b on f.BorrowerID=b.ID
+  inner join [Group] g on g.ID=f.GroupID
+where (DateClaimed >= @0 and DateClaimed < @1)
+  and (g.ID = 21 or g.ParentGroupID=21)
+group by OfferCode
+order by 2 desc
+";
+                var items = db.Fetch<OfferCodeSummary>(sql, startdate, enddate);
+
+                //i'm just going to do the combining stuff here
+                var result = new List<OfferCodeSummary>();
+                var internetOffer = new OfferCodeSummary()
+                {
+                    OfferCode = "Internet",
+                    OfferCount = 0
+                };
+                result.Add(internetOffer);
+                foreach(var item in items)
+                {
+                    if (isInternetOfferCode(item.OfferCode))
+                    {
+                        internetOffer.OfferCount += item.OfferCount;
+                    }
+                    else
+                    {
+                        result.Add(item);
+                    }
+                }
+                result = result.OrderByDescending(i => i.OfferCount).ToList();
+                return result;
+            }
+        }
 
         public static int GetMaxAppointmentsDaily(DateTime startdate, DateTime enddate, int statusid)
         {
@@ -205,5 +258,6 @@ ORDER BY 1 ASC
                 return db.SingleOrDefault<int>(sql, startdate, enddate, statusid);
             }
         }
+        
     }
 }

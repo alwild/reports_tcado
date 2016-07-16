@@ -47,6 +47,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CampaignReports.cs" />
     <Compile Include="CSRReports.cs" />
     <Compile Include="GeckoData.cs" />
     <Compile Include="LOReports.cs" />
